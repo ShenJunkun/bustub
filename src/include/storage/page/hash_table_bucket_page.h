@@ -116,6 +116,8 @@ class HashTableBucketPage {
    * @param bucket_idx the index to update
    */
   void SetReadable(uint32_t bucket_idx);
+  
+  void SetUnreadable(uint32_t bucket_idx);
 
   /**
    * @return the number of readable elements, i.e. current size
