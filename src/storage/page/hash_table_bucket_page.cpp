@@ -55,13 +55,14 @@ bool HASH_TABLE_BUCKET_TYPE::Insert(KeyType key, ValueType value, KeyComparator 
   }
   //没有找到相同的key,value对，进行插入操作。
   if (canUse != BUCKET_ARRAY_SIZE) {
-    SetReadable(idx);
+    SetReadable(canUse);
     array_[canUse] = {key, value};
   } else {
     SetOccupied(idx);
     SetReadable(idx);
-    array_[canUse] = {key, value};
+    array_[idx] = {key, value};
   }
+  // LOG_DEBUG("%d", array_[canUse].first, )
   return true;
 }
 

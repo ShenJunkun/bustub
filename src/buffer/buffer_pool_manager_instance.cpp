@@ -183,6 +183,7 @@ Page *BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) {
     free_list_.pop_front();
     page_table_[page_id] = frame_id;
     InitPage(frame_id, page_id);
+    pages_[frame_id].pin_count_++;
     //从磁盘中读取数据
     disk_manager_->ReadPage(page_id, pages_[frame_id].GetData());
     return &pages_[frame_id];
@@ -205,6 +206,8 @@ Page *BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) {
 
       page_table_[page_id] = frame_id;
       InitPage(frame_id, page_id);
+      pages_[frame_id].pin_count_++;
+      replacer_->Pin(frame_id);
       disk_manager_->ReadPage(page_id, pages_[frame_id].GetData());
       return &pages_[frame_id];
     } else {
@@ -231,6 +234,12 @@ bool BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) {
     if (pages_[idx].GetPinCount() != 0) {
       return false;
     } else {
+      if (pages_[idx].IsDirty()) {
+        bool res = FlushPgImp(pages_[idx].GetPageId());
+        if (!res) {
+          LOG_WARN("把脏页刷新到磁盘失败");
+        }
+      }
       page_table_.erase(page_id);
       InitPage(idx, INVALID_PAGE_ID);
       free_list_.push_back(idx);
@@ -245,8 +254,10 @@ bool BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) {
   if (page_table_.find(page_id) != page_table_.end()) {
     frame_id_t idx = page_table_[page_id];
     pages_[idx].is_dirty_ = is_dirty;
-    pages_->pin_count_ = 0;
-    replacer_->Unpin(idx);
+    pages_[idx].pin_count_--;
+    if (pages_[idx].pin_count_ <= 0) {
+      replacer_->Unpin(idx);
+    }
     return true;
   }
   return false; 
