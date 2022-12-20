@@ -32,31 +32,37 @@ void SeqScanExecutor::Init() {
 }
 
 bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
-
+//TODO 当predicate为null的时候
   if (cursor_ == end_) {
     return false;
   }
-
-  bool res = this->plan_->GetPredicate()->Evaluate(&(*cursor_), GetOutputSchema()).GetAs<bool>();
-  
-
-  while (!res)
-  {
-    cursor_++;
-    if (cursor_ == end_) {
-      break;
-    }
-    res = this->plan_->GetPredicate()->Evaluate(&(*cursor_), GetOutputSchema()).GetAs<bool>();
-  }
-
-  if (cursor_ != end_) {
+  if (this->plan_->GetPredicate() == nullptr) {
     *tuple = *cursor_;
     *rid = (*cursor_).GetRid();
     cursor_++;
     return true;
-  } 
-  
-  return false; 
+    
+  } else {
+    bool res = this->plan_->GetPredicate()->Evaluate(&(*cursor_), GetOutputSchema()).GetAs<bool>();
+    
+    while (!res)
+    {
+      cursor_++;
+      if (cursor_ == end_) {
+        break;
+      }
+      res = this->plan_->GetPredicate()->Evaluate(&(*cursor_), GetOutputSchema()).GetAs<bool>();
+    }
+
+    if (cursor_ != end_) {
+      *tuple = *cursor_;
+      *rid = (*cursor_).GetRid();
+      cursor_++;
+      return true;
+    } 
+    
+    return false; 
+  }
 }
     
 }  // namespace bustub
