@@ -29,6 +29,16 @@ void SeqScanExecutor::Init() {
   auto txn = this->GetExecutorContext()->GetTransaction();
   cursor_ = tableHeap->Begin(txn);
   end_ = tableHeap->End();
+  schema_ = &(tableInfo->schema_);
+}
+
+void SeqScanExecutor::getOutPutTuple(Tuple *tuple, RID *rid) {
+  auto output_schema = this->plan_->OutputSchema();
+  std::vector<Value> values;
+  for (auto column : output_schema->GetColumns()) {
+    values.push_back(column.GetExpr()->Evaluate(&(*cursor_), schema_));
+  }
+  *tuple = Tuple(values, output_schema);
 }
 
 bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
@@ -37,8 +47,9 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
     return false;
   }
   if (this->plan_->GetPredicate() == nullptr) {
-    *tuple = *cursor_;
+    // *tuple = *cursor_;
     *rid = (*cursor_).GetRid();
+    getOutPutTuple(tuple, rid);
     cursor_++;
     return true;
     
@@ -55,8 +66,9 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
     }
 
     if (cursor_ != end_) {
-      *tuple = *cursor_;
+      // *tuple = *cursor_;
       *rid = (*cursor_).GetRid();
+      getOutPutTuple(tuple, rid);
       cursor_++;
       return true;
     } 

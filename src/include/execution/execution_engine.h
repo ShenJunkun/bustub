@@ -54,13 +54,16 @@ class ExecutionEngine {
 
     // Prepare the root executor
     executor->Init();
-
+    bool getResult = true;
+    if (plan->GetType() == PlanType::Update) {
+      getResult = false;
+    }
     // Execute the query plan
     try {
       Tuple tuple;
       RID rid;
       while (executor->Next(&tuple, &rid)) {
-        if (result_set != nullptr) {
+        if (result_set != nullptr && getResult) {
           result_set->push_back(tuple);
         }
       }

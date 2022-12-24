@@ -59,7 +59,7 @@ bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
 
     //update indexes
     std::vector<IndexInfo* > indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(tableInfo_->name_);
-    for (auto index : indexes) {
+    for (auto index : indexes) {      
       index->index_.get()->InsertEntry(*tuple, *rid, exec_ctx_->GetTransaction());
     }
 
