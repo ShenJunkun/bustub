@@ -42,10 +42,12 @@ bool DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
   }
 
   //delete indexes
-  // std::vector<IndexInfo *> indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_);
-  // for (auto index : indexes) {
-  //   // index->index_.get()->DeleteEntry(*tuple, *rid, exec_ctx_->GetTransaction());
-  // }
+  std::vector<IndexInfo *> indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_);
+  
+  for (auto index : indexes) {
+    Tuple index_tuple = tuple->KeyFromTuple(*(plan_->GetChildPlan()->OutputSchema()) , index->key_schema_, index->index_.get()->GetKeyAttrs());
+    index->index_.get()->DeleteEntry(index_tuple, *rid, exec_ctx_->GetTransaction());
+  }
 
   return true; 
 }

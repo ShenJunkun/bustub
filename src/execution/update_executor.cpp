@@ -43,14 +43,16 @@ bool UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
   }
 
   //update indexes
-  // std::vector<IndexInfo *> indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_);
-  // for (auto index : indexes) {
-  //   index->index_.get()->DeleteEntry(*tuple, *rid, exec_ctx_->GetTransaction());
-  //   index->index_.get()->InsertEntry(newTuple, *rid, exec_ctx_->GetTransaction());
-  // }
+  std::vector<IndexInfo *> indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(table_info_->name_);
+  for (auto index : indexes) {
 
+    Tuple older_index = tuple->KeyFromTuple(*(plan_->GetChildPlan()->OutputSchema()) , index->key_schema_, index->index_.get()->GetKeyAttrs());
+    Tuple new_index = newTuple.KeyFromTuple(*(plan_->GetChildPlan()->OutputSchema()) , index->key_schema_, index->index_.get()->GetKeyAttrs());
+    index->index_.get()->DeleteEntry(older_index, *rid, exec_ctx_->GetTransaction());
+    index->index_.get()->InsertEntry(new_index, *rid, exec_ctx_->GetTransaction());
+  }
   
-   return true; 
+  return true; 
 }
 
 Tuple UpdateExecutor::GenerateUpdatedTuple(const Tuple &src_tuple) {

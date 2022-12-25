@@ -55,7 +55,8 @@ class ExecutionEngine {
     // Prepare the root executor
     executor->Init();
     bool getResult = true;
-    if (plan->GetType() == PlanType::Update) {
+    if (plan->GetType() == PlanType::Update || plan->GetType() == PlanType::Insert
+        || plan->GetType() == PlanType::Delete) {
       getResult = false;
     }
     // Execute the query plan

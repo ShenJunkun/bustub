@@ -59,8 +59,9 @@ bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
 
     //update indexes
     std::vector<IndexInfo* > indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(tableInfo_->name_);
-    for (auto index : indexes) {      
-      index->index_.get()->InsertEntry(*tuple, *rid, exec_ctx_->GetTransaction());
+    for (auto index : indexes) {
+      Tuple index_tuple = tuple->KeyFromTuple(tableInfo_->schema_, index->key_schema_, index->index_.get()->GetKeyAttrs());
+      index->index_.get()->InsertEntry(index_tuple, *rid, exec_ctx_->GetTransaction());
     }
 
     return true;
@@ -74,7 +75,8 @@ bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
     //update indexes
     std::vector<IndexInfo* > indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(tableInfo_->name_);
     for (auto index : indexes) {
-      index->index_.get()->InsertEntry(*tuple, *rid, exec_ctx_->GetTransaction());
+      Tuple index_tuple = tuple->KeyFromTuple(*(plan_->GetChildPlan()->OutputSchema()) , index->key_schema_, index->index_.get()->GetKeyAttrs());
+      index->index_.get()->InsertEntry(index_tuple, *rid, exec_ctx_->GetTransaction());
     }
     return true;
   }
