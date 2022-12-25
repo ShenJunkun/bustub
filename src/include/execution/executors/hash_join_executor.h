@@ -20,6 +20,55 @@
 #include "execution/plans/hash_join_plan.h"
 #include "storage/table/tuple.h"
 
+#include "common/util/hash_util.h"
+
+namespace bustub {
+  struct HashjoinKey {
+  /** The group-by values */
+
+  std::vector<Value> group_bys_;
+
+  /**
+   * Compares two hashjoin keys for equality.
+   * @param other the other hashjoin key to be compared with
+   * @return `true` if both hashjoin keys have equivalent group-by expressions, `false` otherwise
+   */
+  bool operator==(const HashjoinKey &other) const {
+    for (uint32_t i = 0; i < other.group_bys_.size(); i++) {
+      if (group_bys_[i].CompareEquals(other.group_bys_[i]) != CmpBool::CmpTrue) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+};
+
+struct HashjoinValue {
+  std::vector<Tuple> tuples;
+};
+
+} // namespace bustub
+
+
+namespace std {
+
+/** Implements std::hash on AggregateKey */
+template <>
+struct hash<bustub::HashjoinKey> {
+  std::size_t operator()(const bustub::HashjoinKey &agg_key) const {
+    size_t curr_hash = 0;
+    for (const auto &key : agg_key.group_bys_) {
+      if (!key.IsNull()) {
+        curr_hash = bustub::HashUtil::CombineHashes(curr_hash, bustub::HashUtil::HashValue(&key));
+      }
+    }
+    return curr_hash;
+  }
+};
+
+}  // namespace std
+
 namespace bustub {
 
 /**
@@ -51,9 +100,22 @@ class HashJoinExecutor : public AbstractExecutor {
   /** @return The output schema for the join */
   const Schema *GetOutputSchema() override { return plan_->OutputSchema(); };
 
+  void GetoutputTuple(Tuple* tuple, RID *rid);
+
  private:
   /** The NestedLoopJoin plan node to be executed. */
   const HashJoinPlanNode *plan_;
+
+  std::unique_ptr<AbstractExecutor> left_child_;
+  std::unique_ptr<AbstractExecutor> right_child_;
+  std::unordered_map<HashjoinKey, HashjoinValue> ht_{};
+  Tuple right_tuple_;
+  RID right_rid_;
+  bool find_already_;
+  std::vector<Tuple>::iterator iter_;
+  std::vector<Tuple>::iterator end_;
+
 };
 
 }  // namespace bustub
+
