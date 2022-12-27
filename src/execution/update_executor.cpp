@@ -12,6 +12,7 @@
 #include <memory>
 
 #include "execution/executors/update_executor.h"
+#include "concurrency/transaction_manager.h"
 #include "common/logger.h"
 
 namespace bustub {
@@ -29,6 +30,10 @@ void UpdateExecutor::Init() {
 }
 
 bool UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
+  
+  auto* txn_mgr = this->GetExecutorContext()->GetTransactionManager();
+  auto* txn = this->GetExecutorContext()->GetTransaction();
+  auto* lock_mgr = this->GetExecutorContext()->GetLockManager();
 
   bool res =child_executor_.get()->Next(tuple, rid);
   if (!res) {
@@ -36,10 +41,23 @@ bool UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
   }
 
   Tuple newTuple = this->GenerateUpdatedTuple(*tuple);
+  
+
+  if (txn->IsSharedLocked(*rid)) {
+    if (!lock_mgr->LockUpgrade(txn, *rid)) {
+      txn_mgr->Abort(txn);
+    }
+  } else if (!txn->IsExclusiveLocked(*rid) && !lock_mgr->LockExclusive(txn, *rid)) {
+    txn_mgr->Abort(txn);
+  }
 
   bool updateRes = table_info_->table_.get()->UpdateTuple(newTuple, *rid, exec_ctx_->GetTransaction());
   if (!updateRes) {
     LOG_WARN("update executor更新失败");
+  }
+
+  if (txn->GetIsolationLevel() == IsolationLevel::READ_UNCOMMITTED) {
+    lock_mgr->Unlock(txn, *rid);
   }
 
   //update indexes
@@ -50,6 +68,12 @@ bool UpdateExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
     Tuple new_index = newTuple.KeyFromTuple(*(plan_->GetChildPlan()->OutputSchema()) , index->key_schema_, index->index_.get()->GetKeyAttrs());
     index->index_.get()->DeleteEntry(older_index, *rid, exec_ctx_->GetTransaction());
     index->index_.get()->InsertEntry(new_index, *rid, exec_ctx_->GetTransaction());
+
+    txn->GetIndexWriteSet()->emplace_back(*rid, plan_->TableOid(), WType::DELETE, *tuple, 
+          index->index_oid_, this->GetExecutorContext()->GetCatalog());
+    txn->GetIndexWriteSet()->emplace_back(*rid, plan_->TableOid(), WType::INSERT, newTuple, 
+          index->index_oid_, this->GetExecutorContext()->GetCatalog());
+
   }
   
   return true; 

@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "execution/executors/insert_executor.h"
+#include "concurrency/transaction_manager.h"
 
 namespace bustub {
 
@@ -50,18 +51,39 @@ void InsertExecutor::Init() {
 }
 
 bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
+
+  auto* txn_mgr = this->GetExecutorContext()->GetTransactionManager();
+  auto* txn = this->GetExecutorContext()->GetTransaction();
+  auto* lock_mgr = this->GetExecutorContext()->GetLockManager();
+
   if (isRawInsert_) {
     if (rawIdx_ >= plan_->RawValues().size()) {
       return false;
     }
     *tuple = Tuple(plan_->RawValuesAt(rawIdx_++), &tableInfo_->schema_);
+
     tableHeap_->InsertTuple(*tuple, rid, exec_ctx_->GetTransaction());
+
+    if (txn->IsSharedLocked(*rid)) {
+      if (!lock_mgr->LockUpgrade(txn, *rid)) {
+        txn_mgr->Abort(txn);
+      }
+    } else if (!txn->IsExclusiveLocked(*rid) && !lock_mgr->LockExclusive(txn, *rid)) {
+      txn_mgr->Abort(txn);
+    }
+
+    // if (txn->GetIsolationLevel() == IsolationLevel::READ_UNCOMMITTED) {
+    //   lock_mgr->Unlock(txn, *rid);
+    // }
 
     //update indexes
     std::vector<IndexInfo* > indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(tableInfo_->name_);
     for (auto index : indexes) {
       Tuple index_tuple = tuple->KeyFromTuple(tableInfo_->schema_, index->key_schema_, index->index_.get()->GetKeyAttrs());
       index->index_.get()->InsertEntry(index_tuple, *rid, exec_ctx_->GetTransaction());
+
+      txn->GetIndexWriteSet()->emplace_back(*rid, plan_->TableOid(), WType::INSERT, *tuple, 
+          index->index_oid_, this->GetExecutorContext()->GetCatalog());
     }
 
     return true;
@@ -70,13 +92,28 @@ bool InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) {
     if (!res) {
       return false;
     }
+
     tableHeap_->InsertTuple(*tuple, rid, exec_ctx_->GetTransaction());
+
+    if (txn->IsSharedLocked(*rid)) {
+      if (!lock_mgr->LockUpgrade(txn, *rid)) {
+        txn_mgr->Abort(txn);
+      }
+    } else if (!txn->IsExclusiveLocked(*rid) && !lock_mgr->LockExclusive(txn, *rid)) {
+      txn_mgr->Abort(txn);
+    }
+
+    // if (txn->GetIsolationLevel() == IsolationLevel::READ_UNCOMMITTED) {
+    //   lock_mgr->Unlock(txn, *rid);
+    // }
 
     //update indexes
     std::vector<IndexInfo* > indexes = this->GetExecutorContext()->GetCatalog()->GetTableIndexes(tableInfo_->name_);
     for (auto index : indexes) {
       Tuple index_tuple = tuple->KeyFromTuple(*(plan_->GetChildPlan()->OutputSchema()) , index->key_schema_, index->index_.get()->GetKeyAttrs());
       index->index_.get()->InsertEntry(index_tuple, *rid, exec_ctx_->GetTransaction());
+      txn->GetIndexWriteSet()->emplace_back(*rid, plan_->TableOid(), WType::INSERT, *tuple, 
+            index->index_oid_, this->GetExecutorContext()->GetCatalog());
     }
     return true;
   }

@@ -12,6 +12,7 @@
 
 #include "execution/executors/seq_scan_executor.h"
 #include "include/storage/table/table_iterator.h"
+#include "concurrency/transaction_manager.h"
 
 namespace bustub {
 
@@ -46,10 +47,26 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
   if (cursor_ == end_) {
     return false;
   }
+  auto* txn_mgr = this->GetExecutorContext()->GetTransactionManager();
+  auto* txn = this->GetExecutorContext()->GetTransaction();
+  auto* lock_mgr = this->GetExecutorContext()->GetLockManager();
+
   if (this->plan_->GetPredicate() == nullptr) {
     // *tuple = *cursor_;
     *rid = (*cursor_).GetRid();
+
+    if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED || 
+        txn->GetIsolationLevel() == IsolationLevel::REPEATABLE_READ) {
+      if (!txn->IsSharedLocked(*rid) && !txn->IsExclusiveLocked(*rid) && !lock_mgr->LockShared(txn, *rid)) {
+        txn_mgr->Abort(txn);
+      }
+    }
+
     getOutPutTuple(tuple, rid);
+
+    if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+      lock_mgr->Unlock(txn, *rid);
+    }
     cursor_++;
     return true;
     
@@ -68,7 +85,20 @@ bool SeqScanExecutor::Next(Tuple *tuple, RID *rid) {
     if (cursor_ != end_) {
       // *tuple = *cursor_;
       *rid = (*cursor_).GetRid();
+
+      if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED || 
+          txn->GetIsolationLevel() == IsolationLevel::REPEATABLE_READ) {
+        if (!txn->IsSharedLocked(*rid) && !txn->IsExclusiveLocked(*rid) && !lock_mgr->LockShared(txn, *rid)) {
+          txn_mgr->Abort(txn);
+        }
+      }
+
       getOutPutTuple(tuple, rid);
+
+      if (txn->GetIsolationLevel() == IsolationLevel::READ_COMMITTED) {
+        lock_mgr->Unlock(txn, *rid);
+      }
+
       cursor_++;
       return true;
     } 
