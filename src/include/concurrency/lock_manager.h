@@ -109,6 +109,7 @@ class LockManager {
 
   /** Lock table for lock requests. */
   std::unordered_map<RID, LockRequestQueue> lock_table_;
+
 };
 
 }  // namespace bustub
